@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "lodash": "^4.17.21"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.114",
+    "@types/lodash": "^4.14.194",
+    "@types/node": "^18.15.11",
+    "@vercel/ncc": "^0.36.1"
+  }
+}

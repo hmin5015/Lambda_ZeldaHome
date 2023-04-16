@@ -1,37 +1,31 @@
-name: deploy to lambda function for zelda home
+name: Deploy
 
 on:
   push:
     branches:
-      - master
-    paths-ignore:
-      - 'dist/**'
+    - master
 
 jobs:
   deploy_lambda:
-    name: build and deploy lambda
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Setup Node
-        uses: actions/setup-node@v2
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
         with:
           node-version: '12'
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v1
         with:
-          audience: 
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-1
       - name: npm install
+        env:
+          CI: true
         run: |
           npm ci
-          npm test
-          npm run package
       - name: deploy
         run: |
-          npx ncc build zelda_user/index.mjs
+          npx ncc build index.ts
           zip -j deploy.zip ./dist/*
-          aws lambda update-function-code --function-name=zeldaHome --zip-file=fileb://deploy.zip
+          aws lambda update-function-code --function-name=lambda-gh-action --zip-file=fileb://deploy.zip
