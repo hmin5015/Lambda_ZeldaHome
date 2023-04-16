@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+    paths-ignore:
+      - 'dist/**'
 
 jobs:
   deploy_lambda:
@@ -27,10 +29,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-1
       - name: npm install
-        env:
-          CI: true
         run: |
           npm ci
+          npm test
+          npm run package
       - name: deploy
         run: |
           npx ncc build zelda_user/index.mjs
