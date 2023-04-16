@@ -1,22 +1,35 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import AWS from 'aws-sdk';
+import { DynamoDB } from 'aws-sdk';
 
-AWS.config.update({
-  region: 'us-west-1',
-});
-
-const dynamodb = new AWS.DynamoDB.DocumentClient();
+const dynamodb = new DynamoDB.DocumentClient();
 const dynamoTableName = 'User';
 const healthPath = '/health';
 const userPath = '/user';
 const usersPath = '/users';
 
-export async function handler(event) {
+interface Event {
+  httpMethod: string;
+  path: string;
+  queryStringParameters?: {
+    userId: string;
+  };
+  body?: string;
+}
+
+interface ResponseBody {
+  Operation?: string;
+  Message?: string;
+  Item?: Record<string, any>;
+  UpdatedAttribute?: Record<string, any>;
+  users?: Record<string, any>[];
+}
+
+async function handler(event: Event): Promise<{ statusCode: number; headers: { 'Content-Type': string }; body: string }> {
   console.log('Request event: ', event);
   let response;
   switch (true) {
     case event.httpMethod === 'GET' && event.path === healthPath:
-      response = buildResponse(200, 'success');
+      response = buildResponse(200);
       break;
     case event.httpMethod === 'GET' && event.path === userPath:
       response = await getUser(event.queryStringParameters?.userId);
@@ -25,19 +38,19 @@ export async function handler(event) {
       response = await getUsers();
       break;
     case event.httpMethod === 'POST' && event.path === userPath:
-      response = await saveUser(JSON.parse(event.body));
+      response = await saveUser(JSON.parse(event.body!));
       break;
     case event.httpMethod === 'PATCH' && event.path === userPath:
-      const requestBody = JSON.parse(event.body);
+      const requestBody = JSON.parse(event.body!);
       response = await modifyUser(requestBody.budgetId, requestBody.updateKey, requestBody.updateValue);
       break;
     default:
-      response = buildResponse(404, '404 Not Found');
+      response = buildResponse(404);
   }
   return response;
 }
 
-async function getUser(userId) {
+const getUser = async (userId: string | undefined): Promise<any> => {
   const params = {
     TableName: dynamoTableName,
     Key: {
@@ -49,30 +62,30 @@ async function getUser(userId) {
     return buildResponse(200, response.Item);
   } catch (error) {
     console.error('Do your custom error handling here. I am just gonna log it: ', error);
-    return buildResponse(500, 'Internal Server Error');
+    return buildResponse(500);
   }
 }
 
-async function getUsers() {
+const getUsers = async (): Promise<any> => {
   const params = {
     TableName: dynamoTableName
   };
   try {
     const allUsers = await scanDynamoRecords(params, []);
-    const body = {
+    const body: ResponseBody = {
       users: allUsers
     };
     return buildResponse(200, body);
   } catch (error) {
     console.error('Do your custom error handling here. I am just gonna log it: ', error);
-    return buildResponse(500, 'Internal Server Error');
+    return buildResponse(500);
   }
 }
 
-async function scanDynamoRecords(scanParams, itemArray) {
+const scanDynamoRecords = async (scanParams: DynamoDB.DocumentClient.ScanInput, itemArray: Record<string, any>[]): Promise<any> =>{
   try {
     const dynamoData = await dynamodb.scan(scanParams).promise();
-    itemArray = itemArray.concat(dynamoData.Items);
+    itemArray = itemArray.concat(dynamoData.Items!);
     if (dynamoData.LastEvaluatedKey) {
       scanParams.ExclusiveStartKey = dynamoData.LastEvaluatedKey;
       return await scanDynamoRecords(scanParams, itemArray);
@@ -80,11 +93,11 @@ async function scanDynamoRecords(scanParams, itemArray) {
     return itemArray;
   } catch (error) {
     console.error('Do your custom error handling here. I am just gonna log it: ', error);
-    return buildResponse(500, 'Internal Server Error');
+    return buildResponse(500);
   }
 }
 
-const saveUser = async (requestBody) => {
+const saveUser = async (requestBody: any): Promise<APIGatewayProxyResult> => {
   const params = {
     TableName: dynamoTableName,
     Item: requestBody
@@ -99,10 +112,11 @@ const saveUser = async (requestBody) => {
     return buildResponse(200, body);
   } catch (error) {
     console.error('Do your custom error handling here. I am just gonna log it: ', error);
+    return buildResponse(500);
   }
-}
+};
 
-const modifyUser = async (userId, updateKey, updateValue) => {
+const modifyUser = async (userId: string, updateKey: string, updateValue: any): Promise<APIGatewayProxyResult> => {
   const params = {
     TableName: dynamoTableName,
     Key: {
@@ -124,15 +138,16 @@ const modifyUser = async (userId, updateKey, updateValue) => {
     return buildResponse(200, body);
   } catch (error) {
     console.error('Do your custom error handling here. I am just gonna log it: ', error);
+    return buildResponse(500);
   }
-}
+};
 
-const buildResponse = (statusCode, body) => {
+const buildResponse = (statusCode: number, body?: ResponseBody): APIGatewayProxyResult => {
   return {
     statusCode,
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(body)
+    body: body === undefined ? "" : JSON.stringify(body)
   };
-}
+};
