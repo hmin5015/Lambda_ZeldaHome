@@ -1,22 +1,25 @@
-const AWS = require('aws-sdk');
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import AWS from 'aws-sdk';
+
 AWS.config.update({
   region: 'us-west-1',
 });
+
 const dynamodb = new AWS.DynamoDB.DocumentClient();
 const dynamoTableName = 'User';
 const healthPath = '/health';
 const userPath = '/user';
 const usersPath = '/users';
 
-exports.handler = async function(event) {
+export async function handler(event) {
   console.log('Request event: ', event);
   let response;
-  switch(true) {
+  switch (true) {
     case event.httpMethod === 'GET' && event.path === healthPath:
-      response = buildResponse(200);
+      response = buildResponse(200, 'success');
       break;
     case event.httpMethod === 'GET' && event.path === userPath:
-      response = await getUser(event.queryStringParameters.userId);
+      response = await getUser(event.queryStringParameters?.userId);
       break;
     case event.httpMethod === 'GET' && event.path === usersPath:
       response = await getUsers();
@@ -40,23 +43,30 @@ async function getUser(userId) {
     Key: {
       'userId': userId
     }
-  }
-  return await dynamodb.get(params).promise().then((response) => {
+  };
+  try {
+    const response = await dynamodb.get(params).promise();
     return buildResponse(200, response.Item);
-  }, (error) => {
+  } catch (error) {
     console.error('Do your custom error handling here. I am just gonna log it: ', error);
-  });
+    return buildResponse(500, 'Internal Server Error');
+  }
 }
 
 async function getUsers() {
   const params = {
     TableName: dynamoTableName
+  };
+  try {
+    const allUsers = await scanDynamoRecords(params, []);
+    const body = {
+      users: allUsers
+    };
+    return buildResponse(200, body);
+  } catch (error) {
+    console.error('Do your custom error handling here. I am just gonna log it: ', error);
+    return buildResponse(500, 'Internal Server Error');
   }
-  const allUsers = await scanDynamoRecords(params, []);
-  const body = {
-    users: allUsers
-  }
-  return buildResponse(200, body);
 }
 
 async function scanDynamoRecords(scanParams, itemArray) {
@@ -70,56 +80,59 @@ async function scanDynamoRecords(scanParams, itemArray) {
     return itemArray;
   } catch (error) {
     console.error('Do your custom error handling here. I am just gonna log it: ', error);
+    return buildResponse(500, 'Internal Server Error');
   }
 }
 
-async function saveUser(requestBody) {
+const saveUser = async (requestBody) => {
   const params = {
     TableName: dynamoTableName,
     Item: requestBody
-  }
-  return await dynamodb.put(params).promise().then(() => {
+  };
+  try {
+    await dynamodb.put(params).promise();
     const body = {
       Operation: 'SAVE',
       Message: 'SUCCESS',
       Item: requestBody
-    }
+    };
     return buildResponse(200, body);
-  }, (error) => {
+  } catch (error) {
     console.error('Do your custom error handling here. I am just gonna log it: ', error);
-  });
+  }
 }
 
-async function modifyUser(userId, updateKey, updateValue) {
+const modifyUser = async (userId, updateKey, updateValue) => {
   const params = {
     TableName: dynamoTableName,
     Key: {
       'userId': userId
     },
-    UpdateExpression: `set ${updateKey} :value`,
+    UpdateExpression: `set ${updateKey} = :value`,
     ExpressionAttributeValues: {
       ':value': updateValue
     },
     ReturnValues: 'UPDATED_NEW'
-  }
-  return await dynamodb.update(params).promise().then((response) => {
+  };
+  try {
+    const response = await dynamodb.update(params).promise();
     const body = {
       Operation: 'SAVE',
       Message: 'SUCCESS',
       UpdatedAttribute: response
-    }
+    };
     return buildResponse(200, body);
-  }, (error) => {
+  } catch (error) {
     console.error('Do your custom error handling here. I am just gonna log it: ', error);
-  });
+  }
 }
 
-function buildResponse(statusCode, body) {
+const buildResponse = (statusCode, body) => {
   return {
-    statusCode: statusCode,
+    statusCode,
     headers: {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)
-  }
+  };
 }
