@@ -24,7 +24,7 @@ interface ResponseBody {
   users?: Record<string, any>[];
 }
 
-async function handler(event: Event): Promise<{ statusCode: number; headers: { 'Content-Type': string }; body: string }> {
+exports.handler = async (event: Event): Promise<{ statusCode: number; headers: { 'Content-Type': string }; body: string }> => {
   console.log('Request event: ', event);
   let response;
   switch (true) {
